@@ -1,56 +1,83 @@
 # Square Root API
 
-A simple FastAPI that returns the square root of any number, protected by API key authentication.
+A simple FastAPI deployed on Databricks Apps that returns the square root of any number.
+
+**Live URL**: https://sqrt-api-7702501906276199.aws.databricksapps.com
+
+## Quick Start (Python)
+
+### One-time setup
+
+```bash
+# Install Databricks CLI
+brew install databricks
+
+# Login (opens browser)
+databricks auth login --host https://samsara-biztech-us-west-2.cloud.databricks.com
+
+# Install Python dependency
+pip install requests
+```
+
+### Use the API
+
+```python
+import json, subprocess, requests
+
+# Get token from Databricks CLI
+token = json.loads(subprocess.run(
+    ["databricks", "auth", "token", "--host", "https://samsara-biztech-us-west-2.cloud.databricks.com"],
+    capture_output=True, text=True
+).stdout)["access_token"]
+
+# Call the API
+def sqrt(n):
+    r = requests.get(f"https://sqrt-api-7702501906276199.aws.databricksapps.com/sqrt/{n}",
+                     headers={"Authorization": f"Bearer {token}"})
+    return r.json()["sqrt"]
+
+# Try it
+print(sqrt(25))   # 5.0
+print(sqrt(144))  # 12.0
+```
+
+## Use in Databricks Notebook
+
+```python
+import requests
+
+token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
+
+response = requests.get(
+    "https://sqrt-api-7702501906276199.aws.databricksapps.com/sqrt/25",
+    headers={"Authorization": f"Bearer {token}"}
+)
+
+print(response.json())  # {'number': 25.0, 'sqrt': 5.0}
+```
+
+## API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /` | Welcome message |
+| `GET /sqrt/{number}` | Returns square root |
+| `GET /whoami` | Shows authenticated user |
+| `GET /docs` | Swagger UI |
 
 ## Local Development
 
 ```bash
 pip install -r requirements.txt
-API_KEY=my-secret-key uvicorn main:app --reload
+uvicorn main:app --reload
 ```
 
-## Usage
-
-All requests to `/sqrt/{number}` require an API key in the `X-API-Key` header:
+## Deploy to Databricks Apps
 
 ```bash
-curl -H "X-API-Key: my-secret-key" http://localhost:8000/sqrt/25
-```
+# Upload code
+databricks workspace import-dir . /Users/<your-email>/sqrt-api --overwrite
 
-Response:
-```json
-{"number": 25.0, "sqrt": 5.0}
-```
-
-## Deploy to Render (Recommended)
-
-1. Go to [render.com](https://render.com) and sign up
-2. Click **New** → **Web Service**
-3. Connect your GitHub repo: `maad-zach/sqrt-api`
-4. Render will auto-detect settings from `render.yaml`
-5. Add environment variable: `API_KEY` = your secret key
-6. Click **Deploy**
-
-## Deploy to Railway
-
-1. Go to [railway.app](https://railway.app) and sign up
-2. Click **New Project** → **Deploy from GitHub**
-3. Select `maad-zach/sqrt-api`
-4. Add environment variable: `API_KEY` = your secret key
-5. Railway auto-deploys!
-
-## API Endpoints
-
-| Endpoint | Auth | Description |
-|----------|------|-------------|
-| `GET /` | None | Welcome message |
-| `GET /sqrt/{number}` | API Key | Returns square root |
-| `GET /docs` | None | Swagger UI |
-
-## Authentication
-
-Include your API key in the request header:
-
-```
-X-API-Key: your-secret-api-key
+# Deploy
+databricks apps deploy sqrt-api --source-code-path /Workspace/Users/<your-email>/sqrt-api
 ```
