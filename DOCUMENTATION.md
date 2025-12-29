@@ -1,126 +1,31 @@
-# Building a Slack Bot on Databricks Apps
+# Building Slack Bots on Databricks Apps
 
-A comprehensive guide to building and deploying a Slack bot that runs on Databricks Apps, using FastAPI and Socket Mode.
+**Your Setup Reference Guide**
 
----
-
-## Table of Contents
-
-1. [Architecture Overview](#architecture-overview)
-2. [Prerequisites](#prerequisites)
-3. [Step 1: Create a Slack App](#step-1-create-a-slack-app)
-4. [Step 2: Build the Python App](#step-2-build-the-python-app)
-5. [Step 3: Deploy to Databricks Apps](#step-3-deploy-to-databricks-apps)
-6. [Step 4: Test and Verify](#step-4-test-and-verify)
-7. [Common Patterns](#common-patterns)
-8. [Troubleshooting](#troubleshooting)
+This guide shows how to create new Slack bots using your existing infrastructure:
+- **Databricks Workspace**: `samsara-biztech-us-west-2.cloud.databricks.com`
+- **Slack App**: `@maad-testing`
 
 ---
 
-## Architecture Overview
+## Quick Start: Create a New Bot
 
-```
-┌──────────────┐      WebSocket       ┌─────────────────────────┐
-│  Slack API   │◄────────────────────►│  Databricks App         │
-│              │   (Socket Mode)      │                         │
-│  - Messages  │                      │  ┌─────────┐ ┌────────┐ │
-│  - Events    │                      │  │ FastAPI │ │ Slack  │ │
-│  - Commands  │                      │  │  (HTTP) │ │  Bot   │ │
-└──────────────┘                      │  └─────────┘ └────────┘ │
-                                      └─────────────────────────┘
-```
+### 1. Copy the Template
 
-### Why Socket Mode?
+Create a new directory for your bot:
 
-- **No public URL needed**: Bot connects outbound to Slack
-- **Works behind Databricks OAuth**: No need for Slack to call your app
-- **Firewall friendly**: Only outbound connections required
-- **Persistent connection**: Instant message delivery
-
----
-
-## Prerequisites
-
-### Tools
 ```bash
-# Databricks CLI
-brew install databricks
-
-# Authenticate to your workspace
-databricks auth login --host https://YOUR-WORKSPACE.cloud.databricks.com
+mkdir ~/github/my-new-bot
+cd ~/github/my-new-bot
 ```
 
-### Python Dependencies
-```
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-slack-bolt==1.21.2
-requests==2.32.3
-```
+### 2. Create the Files
 
----
-
-## Step 1: Create a Slack App
-
-### 1.1 Create the App
-1. Go to https://api.slack.com/apps
-2. Click **Create New App** → **From scratch**
-3. Name your app, select your workspace
-4. Click **Create App**
-
-### 1.2 Enable Socket Mode
-1. Go to **Settings** → **Socket Mode**
-2. Toggle **Enable Socket Mode** → ON
-3. Create an App-Level Token with scope: `connections:write`
-4. **Save the `xapp-...` token**
-
-### 1.3 Add Bot Permissions
-1. Go to **OAuth & Permissions**
-2. Under **Bot Token Scopes**, add:
-   - `channels:history` - Read messages
-   - `channels:read` - Get channel info
-   - `chat:write` - Send messages
-   - `groups:history` - Read private channel messages (optional)
-
-### 1.4 Enable Events
-1. Go to **Event Subscriptions**
-2. Toggle **Enable Events** → ON
-3. Under **Subscribe to bot events**, add:
-   - `message.channels` - Messages in public channels
-   - `message.groups` - Messages in private channels (optional)
-4. Click **Save Changes**
-
-### 1.5 Install to Workspace
-1. Go to **Install App**
-2. Click **Install to Workspace** → **Allow**
-3. **Save the `xoxb-...` Bot Token**
-
-### 1.6 Summary of Tokens
-
-| Token | Format | Where to Find | Used For |
-|-------|--------|---------------|----------|
-| Bot Token | `xoxb-...` | OAuth & Permissions | API calls (send messages, etc.) |
-| App Token | `xapp-...` | Basic Information → App-Level Tokens | Socket Mode connection |
-
----
-
-## Step 2: Build the Python App
-
-### 2.1 Project Structure
-
-```
-your-bot/
-├── app.py              # Main app (FastAPI + Slack bot)
-├── app.yaml            # Databricks Apps config
-├── requirements.txt    # Dependencies
-└── README.md
-```
-
-### 2.2 The Main App (`app.py`)
+**`app.py`** - Your bot logic:
 
 ```python
 """
-FastAPI + Slack Bot running on Databricks Apps
+My New Bot - [describe what it does]
 """
 
 import os
@@ -130,37 +35,28 @@ from fastapi import FastAPI, HTTPException
 from slack_bolt import App as SlackApp
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
-# === Configuration ===
+# === Config ===
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN")
-ALLOWED_CHANNEL = "your-channel-name"  # Optional: restrict to one channel
+ALLOWED_CHANNEL = "your-channel-name"  # Change this!
 
-# === FastAPI App ===
-api = FastAPI(title="Your Bot API")
+# === FastAPI ===
+api = FastAPI(title="My New Bot")
 
 @api.get("/")
 def root():
-    return {"status": "running"}
+    return {"status": "running", "bot": "my-new-bot"}
 
 @api.get("/health")
 def health():
     return {"api": "healthy", "slack_bot": "running"}
 
-# Add your API endpoints here
-@api.get("/your-endpoint/{param}")
-def your_endpoint(param: str):
-    # Your logic here
-    return {"result": param}
-
-
 # === Slack Bot ===
 slack_app = SlackApp(token=SLACK_BOT_TOKEN)
 
-# Cache for channel names (optional optimization)
 _channel_cache = {}
 
 def get_channel_name(client, channel_id):
-    """Get channel name from ID (cached)"""
     if channel_id not in _channel_cache:
         try:
             info = client.conversations_info(channel=channel_id)
@@ -170,82 +66,56 @@ def get_channel_name(client, channel_id):
     return _channel_cache.get(channel_id)
 
 
-# Pattern: Respond to messages matching a regex
-@slack_app.message(re.compile(r"your-pattern-here"))
+# === YOUR BOT LOGIC HERE ===
+
+@slack_app.message(re.compile(r"YOUR_PATTERN_HERE"))
 def handle_message(message, say, client):
-    """Handle messages matching the pattern"""
-    
-    # Optional: Only respond in specific channel
-    channel_name = get_channel_name(client, message["channel"])
-    if channel_name != ALLOWED_CHANNEL:
+    # Only respond in allowed channel
+    if get_channel_name(client, message["channel"]) != ALLOWED_CHANNEL:
         return
     
-    # Get the message text
     text = message["text"]
     
-    # Your logic here
+    # YOUR LOGIC HERE
     result = f"You said: {text}"
     
-    # Reply in thread
     say(text=result, thread_ts=message["ts"])
 
 
-# Pattern: Respond to app mentions (@your-bot)
-@slack_app.event("app_mention")
-def handle_mention(event, say):
-    """Handle @mentions of the bot"""
-    user = event["user"]
-    say(f"Hi <@{user}>! How can I help?")
-
-
-# Pattern: Handle slash commands
-@slack_app.command("/your-command")
-def handle_command(ack, command, say):
-    """Handle /your-command"""
-    ack()  # Acknowledge the command
-    text = command["text"]
-    say(f"You ran the command with: {text}")
-
-
-# Catch-all for other messages (prevents errors)
+# Catch-all (prevents errors)
 @slack_app.event("message")
-def handle_other_messages(event, logger):
+def handle_other(event, logger):
     pass
 
 
-# === Start Slack Bot in Background ===
+# === Start Bot ===
 def start_slack_bot():
     if SLACK_BOT_TOKEN and SLACK_APP_TOKEN:
         print("🤖 Starting Slack bot...")
         handler = SocketModeHandler(slack_app, SLACK_APP_TOKEN)
         handler.start()
-    else:
-        print("⚠️ Slack tokens not set, bot disabled")
 
 if SLACK_BOT_TOKEN and SLACK_APP_TOKEN:
-    bot_thread = threading.Thread(target=start_slack_bot, daemon=True)
-    bot_thread.start()
-    print("✅ Slack bot started in background")
+    threading.Thread(target=start_slack_bot, daemon=True).start()
+    print("✅ Slack bot running")
 
-
-# Export for uvicorn
 app = api
 ```
 
-### 2.3 Databricks Config (`app.yaml`)
+**`app.yaml`** - Databricks config (tokens stored here, NOT in GitHub):
 
 ```yaml
 command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 env:
   - name: SLACK_BOT_TOKEN
-    value: "xoxb-your-bot-token"
+    value: "xoxb-YOUR-BOT-TOKEN"  # Get from: Slack App → OAuth & Permissions
   - name: SLACK_APP_TOKEN
-    value: "xapp-your-app-token"
+    value: "xapp-YOUR-APP-TOKEN"  # Get from: Slack App → Basic Information → App-Level Tokens
 ```
 
-⚠️ **Security Note**: Don't commit tokens to GitHub! Store them only in the Databricks workspace version.
+> **Note**: The actual tokens for `@maad-testing` are stored in the Databricks workspace version of app.yaml at `/Users/zach.merritt@samsara.com/sqrt-api/app.yaml`. Copy from there when creating new bots.
 
-### 2.4 Dependencies (`requirements.txt`)
+**`requirements.txt`**:
 
 ```
 fastapi==0.115.6
@@ -254,225 +124,261 @@ slack-bolt==1.21.2
 requests==2.32.3
 ```
 
----
-
-## Step 3: Deploy to Databricks Apps
-
-### 3.1 Create the App (One-time)
+### 3. Deploy to Databricks
 
 ```bash
-databricks apps create your-app-name \
-  --description "Your bot description" \
+# Create the app (one-time)
+databricks apps create my-new-bot --description "My new bot" --no-wait
+
+# Wait ~2 min for compute to start, then...
+
+# Upload code (only essential files, not .git or .venv)
+mkdir -p /tmp/my-new-bot-deploy
+cp app.py app.yaml requirements.txt /tmp/my-new-bot-deploy/
+databricks workspace import-dir /tmp/my-new-bot-deploy /Users/zach.merritt@samsara.com/my-new-bot --overwrite
+
+# Deploy
+databricks apps deploy my-new-bot \
+  --source-code-path /Workspace/Users/zach.merritt@samsara.com/my-new-bot \
   --no-wait
+
+# Check status (wait ~1-2 min)
+databricks apps get my-new-bot
 ```
 
-### 3.2 Upload Code
+### 4. Test It
 
 ```bash
-# Upload to Databricks workspace
-databricks workspace import-dir ./your-bot /Users/YOUR-EMAIL/your-bot --overwrite
-```
-
-### 3.3 Deploy
-
-```bash
-databricks apps deploy your-app-name \
-  --source-code-path /Workspace/Users/YOUR-EMAIL/your-bot \
-  --no-wait
-```
-
-### 3.4 Check Status
-
-```bash
-# Check if running
-databricks apps get your-app-name
-
-# List deployments
-databricks apps list-deployments your-app-name
-```
-
-### 3.5 Grant Access to All Users (Optional)
-
-```bash
-databricks apps update-permissions your-app-name \
-  --json '{"access_control_list": [{"group_name": "users", "permission_level": "CAN_USE"}]}'
-```
-
----
-
-## Step 4: Test and Verify
-
-### 4.1 Test the API
-
-```bash
-# Get OAuth token
-TOKEN=$(databricks auth token --host https://YOUR-WORKSPACE.cloud.databricks.com \
+# Verify it's running
+TOKEN=$(databricks auth token --host https://samsara-biztech-us-west-2.cloud.databricks.com \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Call your API
-curl "https://your-app-URL.databricksapps.com/health" \
+curl "https://MY-NEW-BOT-URL.aws.databricksapps.com/health" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-### 4.2 Test the Slack Bot
-
-1. Invite bot to a channel: `/invite @your-bot`
-2. Post a message that matches your pattern
-3. Bot should reply in a thread
+Then in Slack:
+1. `/invite @maad-testing` in your channel
+2. Post a message matching your pattern
+3. Bot replies in thread!
 
 ---
 
-## Common Patterns
+## Common Bot Patterns
 
-### Pattern 1: Respond to Specific Text
-
-```python
-@slack_app.message("hello")
-def handle_hello(message, say):
-    say("Hello! 👋", thread_ts=message["ts"])
-```
-
-### Pattern 2: Respond to Regex Pattern
+### Pattern: Respond to Numbers (like sqrt-api)
 
 ```python
-@slack_app.message(re.compile(r"^#(\d+)$"))  # Matches "#123"
-def handle_ticket(message, say, context):
-    ticket_id = context["matches"][0]
-    say(f"Looking up ticket {ticket_id}...", thread_ts=message["ts"])
+@slack_app.message(re.compile(r"^-?\d+\.?\d*$"))
+def handle_number(message, say, client):
+    if get_channel_name(client, message["channel"]) != ALLOWED_CHANNEL:
+        return
+    
+    number = float(message["text"])
+    result = do_something_with(number)
+    say(text=f"Result: {result}", thread_ts=message["ts"])
 ```
 
-### Pattern 3: Call External API
+### Pattern: Respond to Keywords
+
+```python
+@slack_app.message(re.compile(r"(help|info|status)", re.IGNORECASE))
+def handle_keywords(message, say, client):
+    if get_channel_name(client, message["channel"]) != ALLOWED_CHANNEL:
+        return
+    
+    say(text="Here's some help...", thread_ts=message["ts"])
+```
+
+### Pattern: Extract Data from Message
+
+```python
+# Matches: "lookup ACME Corp" or "lookup 12345"
+@slack_app.message(re.compile(r"^lookup\s+(.+)$", re.IGNORECASE))
+def handle_lookup(message, say, client, context):
+    if get_channel_name(client, message["channel"]) != ALLOWED_CHANNEL:
+        return
+    
+    query = context["matches"][0]  # The captured group
+    
+    # Call an external API
+    result = call_your_api(query)
+    
+    say(text=f"Found: {result}", thread_ts=message["ts"])
+```
+
+### Pattern: Call External API with Auth
 
 ```python
 import requests
 
-@slack_app.message(re.compile(r"^lookup (.+)$"))
-def handle_lookup(message, say, context):
-    query = context["matches"][0]
+EXTERNAL_API_URL = "https://api.example.com"
+EXTERNAL_API_KEY = os.environ.get("EXTERNAL_API_KEY")
+
+@slack_app.message(re.compile(r"^fetch\s+(\S+)$"))
+def handle_fetch(message, say, client, context):
+    if get_channel_name(client, message["channel"]) != ALLOWED_CHANNEL:
+        return
     
-    # Call your API
-    response = requests.get(f"https://api.example.com/search?q={query}")
-    result = response.json()
+    account_id = context["matches"][0]
     
-    say(f"Found: {result}", thread_ts=message["ts"])
+    response = requests.get(
+        f"{EXTERNAL_API_URL}/v1/state/{account_id}",
+        headers={"X-API-Key": EXTERNAL_API_KEY}
+    )
+    
+    if response.status_code == 200:
+        data = response.json()
+        say(text=f"Account: {data}", thread_ts=message["ts"])
+    else:
+        say(text=f"Error: {response.status_code}", thread_ts=message["ts"])
 ```
 
-### Pattern 4: Interactive Buttons
+### Pattern: Format Rich Slack Messages
 
 ```python
-@slack_app.message("menu")
-def show_menu(message, say):
+@slack_app.message(re.compile(r"^report\s+(\S+)$"))
+def handle_report(message, say, client, context):
+    if get_channel_name(client, message["channel"]) != ALLOWED_CHANNEL:
+        return
+    
+    account_id = context["matches"][0]
+    data = get_account_data(account_id)
+    
+    # Rich formatting with blocks
     say(
         blocks=[
             {
-                "type": "actions",
-                "elements": [
-                    {"type": "button", "text": {"type": "plain_text", "text": "Option A"}, "action_id": "option_a"},
-                    {"type": "button", "text": {"type": "plain_text", "text": "Option B"}, "action_id": "option_b"},
+                "type": "header",
+                "text": {"type": "plain_text", "text": f"📊 Report for {account_id}"}
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {"type": "mrkdwn", "text": f"*Status:*\n{data['status']}"},
+                    {"type": "mrkdwn", "text": f"*Score:*\n{data['score']}"},
                 ]
+            },
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Summary:*\n{data['summary']}"}
             }
         ],
         thread_ts=message["ts"]
     )
-
-@slack_app.action("option_a")
-def handle_option_a(ack, say):
-    ack()
-    say("You chose Option A!")
-```
-
-### Pattern 5: Scheduled Messages
-
-```python
-from datetime import datetime, timedelta
-
-@slack_app.message("remind me")
-def set_reminder(message, say, client):
-    # Schedule message for 1 hour from now
-    future_time = datetime.now() + timedelta(hours=1)
-    
-    client.chat_scheduleMessage(
-        channel=message["channel"],
-        post_at=int(future_time.timestamp()),
-        text="This is your reminder!"
-    )
-    
-    say("Reminder set for 1 hour from now!", thread_ts=message["ts"])
 ```
 
 ---
 
-## Troubleshooting
-
-### Bot Not Responding
-
-1. **Check bot is running**:
-   ```bash
-   curl "https://your-app-URL.databricksapps.com/health" -H "Authorization: Bearer $TOKEN"
-   # Should return: {"api": "healthy", "slack_bot": "running"}
-   ```
-
-2. **Check bot is in channel**: Use `/invite @your-bot`
-
-3. **Check event subscriptions**: Ensure `message.channels` is enabled in Slack App settings
-
-4. **Check tokens**: Verify both `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` are set correctly
-
-### Deployment Stuck
+## Updating an Existing Bot
 
 ```bash
+# Edit your local files, then:
+
+# Re-upload
+cp app.py app.yaml requirements.txt /tmp/my-bot-deploy/
+databricks workspace import-dir /tmp/my-bot-deploy /Users/zach.merritt@samsara.com/my-bot --overwrite
+
+# Redeploy
+databricks apps deploy my-bot \
+  --source-code-path /Workspace/Users/zach.merritt@samsara.com/my-bot \
+  --no-wait
+
 # Check deployment status
-databricks apps list-deployments your-app-name
-
-# If stuck, try redeploying
-databricks apps deploy your-app-name --source-code-path /Workspace/... --no-wait
+databricks apps list-deployments my-bot
 ```
-
-### Token Expired (for API access)
-
-```bash
-# Get fresh token
-databricks auth token --host https://YOUR-WORKSPACE.cloud.databricks.com
-```
-
-For long-lived programmatic access, ask your admin to create a **service principal**.
 
 ---
 
-## Quick Reference Commands
+## Adding a New Channel to @maad-testing
+
+The Slack app `@maad-testing` is already set up. To use it in a new channel:
+
+1. Go to the channel in Slack
+2. Type `/invite @maad-testing`
+3. Update your bot's `ALLOWED_CHANNEL` variable
+4. Redeploy
+
+---
+
+## Quick Reference
+
+### Your Tokens (for app.yaml)
+
+Get the actual tokens from the Databricks workspace:
 
 ```bash
-# Create app
+# View the tokens stored in Databricks
+databricks workspace export /Users/zach.merritt@samsara.com/sqrt-api/app.yaml
+```
+
+Or copy from an existing deployed bot's `app.yaml`.
+
+### Databricks Commands
+
+```bash
+# Authenticate (one-time)
+databricks auth login --host https://samsara-biztech-us-west-2.cloud.databricks.com
+
+# Create new app
 databricks apps create APP_NAME --description "..." --no-wait
 
 # Upload code
-databricks workspace import-dir ./local-dir /Users/EMAIL/remote-dir --overwrite
+databricks workspace import-dir /tmp/deploy-dir /Users/zach.merritt@samsara.com/APP_NAME --overwrite
 
 # Deploy
-databricks apps deploy APP_NAME --source-code-path /Workspace/Users/EMAIL/dir --no-wait
+databricks apps deploy APP_NAME --source-code-path /Workspace/Users/zach.merritt@samsara.com/APP_NAME --no-wait
 
 # Check status
 databricks apps get APP_NAME
 
-# View deployments
+# List deployments
 databricks apps list-deployments APP_NAME
 
-# Set permissions
+# Grant access to all users
 databricks apps update-permissions APP_NAME --json '{"access_control_list": [{"group_name": "users", "permission_level": "CAN_USE"}]}'
 
-# Get OAuth token
-databricks auth token --host https://WORKSPACE.cloud.databricks.com
+# Get OAuth token (for API testing)
+databricks auth token --host https://samsara-biztech-us-west-2.cloud.databricks.com
+```
+
+### Test API Endpoint
+
+```bash
+TOKEN=$(databricks auth token --host https://samsara-biztech-us-west-2.cloud.databricks.com \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+curl "https://YOUR-APP-URL.aws.databricksapps.com/health" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
 
-## Resources
+## Architecture Reminder
 
-- [Slack Bolt for Python](https://slack.dev/bolt-python/)
-- [Databricks Apps Documentation](https://docs.databricks.com/en/dev-tools/databricks-apps/index.html)
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
+```
+┌──────────────┐     WebSocket      ┌─────────────────────────┐
+│    Slack     │◄──────────────────►│   Databricks App        │
+│              │   (Socket Mode)    │                         │
+│ @maad-testing│                    │  ┌─────────┐ ┌────────┐ │
+│              │                    │  │ FastAPI │ │ Slack  │ │
+└──────────────┘                    │  │  :8000  │ │  Bot   │ │
+                                    │  └─────────┘ └────────┘ │
+                                    └─────────────────────────┘
+```
+
+- **Socket Mode**: Bot connects outbound (no public URL needed)
+- **FastAPI**: Optional HTTP endpoints (health checks, APIs)
+- **Thread replies**: `say(text=..., thread_ts=message["ts"])`
 
 ---
 
-*Generated from the sqrt-api PoC project*
+## Existing Bots
 
+| Bot | Channel | What it does |
+|-----|---------|--------------|
+| sqrt-api | #sqrt-example | Replies with √number |
+
+---
+
+*Last updated: December 2024*
