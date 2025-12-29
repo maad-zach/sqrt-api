@@ -42,12 +42,31 @@ def health():
 # === Slack Bot ===
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN")
+ALLOWED_CHANNEL = "sqrt-example"  # Only respond in this channel
 
 slack_app = SlackApp(token=SLACK_BOT_TOKEN)
 
+# Cache for channel ID lookup
+_channel_id_cache = {}
+
+def get_channel_name(client, channel_id):
+    """Get channel name from ID (cached)"""
+    if channel_id not in _channel_id_cache:
+        try:
+            info = client.conversations_info(channel=channel_id)
+            _channel_id_cache[channel_id] = info["channel"]["name"]
+        except:
+            _channel_id_cache[channel_id] = None
+    return _channel_id_cache.get(channel_id)
+
 @slack_app.message(re.compile(r"^-?\d+\.?\d*$"))
-def handle_number(message, say):
-    """When someone posts a number, reply with its square root"""
+def handle_number(message, say, client):
+    """When someone posts a number in #sqrt-example, reply with its square root"""
+    # Only respond in the allowed channel
+    channel_name = get_channel_name(client, message["channel"])
+    if channel_name != ALLOWED_CHANNEL:
+        return  # Ignore messages from other channels
+    
     number_str = message["text"].strip()
     
     try:
