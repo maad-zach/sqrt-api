@@ -1,2 +1,6 @@
-command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-
+command: ["uvicorn", "app_with_slack:app", "--host", "0.0.0.0", "--port", "8000"]
+env:
+  - name: SLACK_BOT_TOKEN
+    value: "${SLACK_BOT_TOKEN}"  # Set in Databricks workspace
+  - name: SLACK_APP_TOKEN
+    value: "${SLACK_APP_TOKEN}"  # Set in Databricks workspace
